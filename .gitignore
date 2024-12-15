@@ -185,3 +185,5 @@ infra/.openai_deployment_config.json
 
 
 .audio
+src/aoai-api-simulator/config.json
+**/.idea
