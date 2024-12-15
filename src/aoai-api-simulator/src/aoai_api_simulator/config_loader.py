@@ -4,11 +4,15 @@ import logging
 import os
 import sys
 
+import dotenv
+
 from aoai_api_simulator.generator.manager import get_default_generators
 from aoai_api_simulator.generator.model_catalogue import model_catalogue
 from aoai_api_simulator.limiters import get_default_limiters
 from aoai_api_simulator.models import Config, OpenAIDeployment
 from aoai_api_simulator.record_replay.handler import get_default_forwarders
+
+dotenv.load_dotenv()
 
 
 def get_config_from_env_vars(logger: logging.Logger) -> Config:
@@ -34,7 +38,7 @@ def initialize_config(config: Config):
     load_extension(config)
 
 
-def _load_openai_deployments(logger: logging.Logger) -> dict[str, OpenAIDeployment]:
+def _load_openai_deployments(logger: logging.Logger) -> dict[str, OpenAIDeployment]|None:
     openai_deployment_config_path = os.getenv("OPENAI_DEPLOYMENT_CONFIG_PATH")
 
     if not openai_deployment_config_path:

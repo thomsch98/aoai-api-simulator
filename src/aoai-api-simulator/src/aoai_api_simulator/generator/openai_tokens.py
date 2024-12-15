@@ -43,7 +43,11 @@ def num_tokens_from_string(string: str, model: str) -> int:
     except KeyError:
         _warn_once(model, f"Warning: model ({model}) not found. Using cl100k_base encoding.")
         encoding = tiktoken.get_encoding("cl100k_base")
-    num_tokens = len(encoding.encode(string))
+    if isinstance(string, list):
+        num_tokens = len(string)
+    else:
+        num_tokens = len(encoding.encode(string))
+    logger.info("num_tokens_from_string returning %s tokens.",num_tokens)
     return num_tokens
 
 

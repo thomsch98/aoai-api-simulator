@@ -1,8 +1,11 @@
+import json
 import logging
 import re
+import time
 import traceback
 from typing import Annotated
 
+import fastapi.encoders
 from aoai_api_simulator.auth import validate_api_key_header
 from aoai_api_simulator.config_loader import get_config, set_config
 from aoai_api_simulator.generator.manager import invoke_generators
@@ -11,7 +14,8 @@ from aoai_api_simulator.limiters import apply_limits
 from aoai_api_simulator.models import RequestContext
 from aoai_api_simulator.record_replay.handler import RecordReplayHandler
 from aoai_api_simulator.record_replay.persistence import YamlRecordingPersister
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, Security
+from fastapi.security import APIKeyHeader
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,7 @@ repeated_quotes = re.compile(r"//+")
 # pylint: disable-next=invalid-name
 record_replay_handler = None
 
+api_key_header = APIKeyHeader(name="api-key")
 
 def apply_config():
     # pylint: disable-next=global-statement
@@ -71,7 +76,8 @@ async def root():
 
 
 @app.post("/++/save-recordings")
-def save_recordings(_: Annotated[bool, Depends(_default_validate_api_key_header)]):
+def save_recordings(_: Annotated[bool, Depends(_default_validate_api_key_header)],
+          _api_key_header: str = Security(api_key_header)):
     if get_config().simulator_mode == "record":
         logger.info("📼 Saving recordings...")
         record_replay_handler.save_recordings()
@@ -83,7 +89,8 @@ def save_recordings(_: Annotated[bool, Depends(_default_validate_api_key_header)
 
 
 @app.get("/++/config")
-def config_get(_: Annotated[bool, Depends(_default_validate_api_key_header)]):
+def config_get(_: Annotated[bool, Depends(_default_validate_api_key_header)],
+          _api_key_header: str = Security(api_key_header)):
     # return a subset of the config as not all properties make sense (e.g. generator functions)
     config = get_config()
     return {
@@ -118,7 +125,8 @@ def config_get(_: Annotated[bool, Depends(_default_validate_api_key_header)]):
 
 
 @app.patch("/++/config")
-def config_patch(config: dict, _: Annotated[bool, Depends(_default_validate_api_key_header)]):
+def config_patch(config: dict, _: Annotated[bool, Depends(_default_validate_api_key_header)],
+          _api_key_header: str = Security(api_key_header)):
     original_config = get_config()
 
     # Config is a nested settings class to enable setting env var names on child items
@@ -151,8 +159,10 @@ def config_patch(config: dict, _: Annotated[bool, Depends(_default_validate_api_
 
 
 @app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "DELETE"])
-async def catchall(request: Request):
-    logger.debug("⚡ handling route: %s", request.url.path)
+async def catchall(request: Request,
+		full_path:str,
+		_api_key_header: str = Security(api_key_header)):
+    logger.debug("⚡ handling request: %s %s %s %s", request.method,request.url,request.headers, await request.body())
 
     response = None
     context = RequestContext(config=get_config(), request=request)

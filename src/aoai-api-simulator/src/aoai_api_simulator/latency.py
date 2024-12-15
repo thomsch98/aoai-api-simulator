@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 
 from aoai_api_simulator import constants
@@ -6,6 +7,7 @@ from aoai_api_simulator.metrics import simulator_metrics
 from aoai_api_simulator.models import RequestContext
 from fastapi import Response
 
+logger = logging.getLogger(__name__)
 
 class LatencyGenerator:
     """
@@ -56,6 +58,7 @@ class LatencyGenerator:
                 extra_latency_s = target_duration_s - base_duration_s
 
         if extra_latency_s and extra_latency_s > 0:
+            logger.debug("Adding latency to the response: %.3f secs.", extra_latency_s)
             await asyncio.sleep(extra_latency_s)
 
         full_end_time = time.perf_counter()

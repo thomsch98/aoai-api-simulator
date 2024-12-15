@@ -18,7 +18,9 @@ from fastapi import Response
 logger = logging.getLogger(__name__)
 
 
-async def apply_limits(context: RequestContext, response: Response) -> Awaitable[Response]:
+async def apply_limits(
+    context: RequestContext, response: Response
+) -> Awaitable[Response]:
     limiter_name = context.values.get(constants.SIMULATOR_KEY_LIMITER)
     limiter = context.config.limiters.get(limiter_name) if limiter_name else None
     if limiter:
@@ -75,12 +77,16 @@ async def determine_token_cost(context: RequestContext):
             request_body = await context.request.json()
             request_input = request_body.get("input")
             if request_input is None:
-                logger.warning("openai_limiter: input not found in request body for embedding request")
+                logger.warning(
+                    "openai_limiter: input not found in request body for embedding request"
+                )
                 token_cost = 0
             else:
                 if isinstance(request_input, list):
                     # TODO - validate whether we should sum the ceil values or ceil the sum
-                    token_cost = sum(math.ceil(len(input_str) / 4) for input_str in request_input)
+                    token_cost = sum(
+                        math.ceil(len(input_str) / 4) for input_str in request_input
+                    )
                 else:
                     token_cost = math.ceil(len(request_input) / 4)
         else:
@@ -128,7 +134,9 @@ class TokensPerMinuteSlidingWindow:
         while len(self._requests) > 0 and self._requests[0].timestamp <= cut_off:
             self._requests.pop(0)
 
-    def _calculate_window_counts_for_request(self, token_cost: int, timestamp: float) -> tuple[int, int, float, float]:
+    def _calculate_window_counts_for_request(
+        self, token_cost: int, timestamp: float
+    ) -> tuple[int, int, float, float]:
         # Iterate the the list in reverse order
         # Track:
         #  - the number of requests in the last 10 seconds (including this request)
@@ -295,12 +303,16 @@ def create_openai_tokens_limiter(
         # only handle token-based limited models
         if deployment.model.is_token_limited:
             tokens_per_minute = deployment.tokens_per_minute
-            requests_per_10s = math.ceil(tokens_per_minute / 1000)  # 1/6 * (6 * TPM / 1000)
+            requests_per_10s = math.ceil(
+                tokens_per_minute / 1000
+            )  # 1/6 * (6 * TPM / 1000)
             deployment_limits[deployment.name] = TokensPerMinuteSlidingWindow(
                 requests_per_10_seconds=requests_per_10s, tokens_per_minute=tokens_per_minute
             )
 
-    async def limiter(context: RequestContext, response: Response) -> Awaitable[Response]:
+    async def limiter(
+        context: RequestContext, response: Response
+    ) -> Awaitable[Response]:
         deployment_name = context.values.get(constants.SIMULATOR_KEY_DEPLOYMENT_NAME)
         if not deployment_name:
             logger.warning("openai_limiter: deployment name not found in context")
@@ -333,9 +345,11 @@ def create_openai_tokens_limiter(
             }
 
             retry_after_header = (
-                "x-ratelimit-reset-tokens" if window_result.retry_reason == "tokens" else "x-ratelimit-reset-requests"
+                "x-ratelimit-reset-tokens"
+                if window_result.retry_reason == "tokens"
+                else "x-ratelimit-reset-requests"
             )
-            return Response(
+            response = Response(
                 status_code=429,
                 content=json.dumps(content),
                 headers={
@@ -343,8 +357,14 @@ def create_openai_tokens_limiter(
                     retry_after_header: str(window_result.retry_after),
                 },
             )
-        response.headers["x-ratelimit-remaining-tokens"] = str(window_result.remaining_tokens)
-        response.headers["x-ratelimit-remaining-requests"] = str(window_result.remaining_requests)
+            logger.warning(response.headers)
+            return response
+        response.headers["x-ratelimit-remaining-tokens"] = str(
+            window_result.remaining_tokens
+        )
+        response.headers["x-ratelimit-remaining-requests"] = str(
+            window_result.remaining_requests
+        )
         return response
 
     return limiter
@@ -358,11 +378,16 @@ def create_openai_requests_limiter(
 
     for deployment in deployments.values():
         # only handle request-based limited models
-        if not deployment.model.is_token_limited:
-            requests_per_minute = deployment.requests_per_minute
-            deployment_limits[deployment.name] = RequestsPerMinuteSlidingWindow(requests_per_minute)
+        if type(deployment.model) is not str:
+            if not deployment.model.is_token_limited:
+                requests_per_minute = deployment.requests_per_minute
+                deployment_limits[deployment.name] = RequestsPerMinuteSlidingWindow(
+                    requests_per_minute
+                )
 
-    async def limiter(context: RequestContext, response: Response) -> Awaitable[Response]:
+    async def limiter(
+        context: RequestContext, response: Response
+    ) -> Awaitable[Response]:
         deployment_name = context.values.get(constants.SIMULATOR_KEY_DEPLOYMENT_NAME)
         if not deployment_name:
             logger.warning("openai_limiter: deployment name not found in context")
@@ -392,14 +417,18 @@ def create_openai_requests_limiter(
                 }
             }
 
-            return Response(
+            response = Response(
                 status_code=429,
                 content=json.dumps(content),
                 headers={
                     "Retry-After": str(window_result.retry_after),
                 },
             )
-        response.headers["x-ratelimit-remaining-requests"] = str(window_result.remaining_requests)
+            logger.warning(response.headers)
+            return response
+        response.headers["x-ratelimit-remaining-requests"] = str(
+            window_result.remaining_requests
+        )
         return response
 
     return limiter
@@ -411,6 +440,10 @@ def get_default_limiters(config: Config):
     # whether the request should be allowed
     # Limiter returns Response object if request should be blocked or None otherwise
     return {
-        constants.LIMITER_OPENAI_TOKENS: create_openai_tokens_limiter(config.openai_deployments or {}),
-        constants.LIMITER_OPENAI_REQUESTS: create_openai_requests_limiter(config.openai_deployments or {}),
+        constants.LIMITER_OPENAI_TOKENS: create_openai_tokens_limiter(
+            config.openai_deployments or {}
+        ),
+        constants.LIMITER_OPENAI_REQUESTS: create_openai_requests_limiter(
+            config.openai_deployments or {}
+        ),
     }
